@@ -1,0 +1,78 @@
+version: "3.4"
+
+volumes:
+  esdata:
+
+networks:
+  elk:
+    driver: bridge
+
+services:
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.5.1
+    networks:
+      - elk
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    cap_add:
+      - IPC_LOCK
+    expose:
+      - "9200"
+      - "9300"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+      - ./services/elk/elasticsearch/config:/usr/share/elasticsearch/config/
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.5.1
+    networks:
+      - elk
+      - reverse-proxy
+    depends_on:
+      - elasticsearch
+    expose:
+      - "5601"
+    environment:
+      - xpack.security.enabled=false
+      - VIRTUAL_HOST=kibana.local
+      - VIRTUAL_PORT=5601
+    volumes:
+      - ./services/elk/kibana/config:/usr/share/kibana/config/
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.5.1
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+    expose:
+      - "5959"
+    volumes:
+      - ./services/elk/logstash/config:/usr/share/logstash/config/
+      - ./services/elk/logstash/pipeline:/usr/share/logstash/pipeline/
+
+  metricbeat:
+    image: docker.elastic.co/beats/metricbeat:7.5.1
+    depends_on:
+      - kibana
+      - elasticsearch
+    networks:
+      - elk
+    volumes:
+      - ./services/elk/metricbeat/config:/usr/share/metricbeat/config/
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - -e
+      - -c
+      - /usr/share/metricbeat/config/metricbeat.yml
+    user: root
+    restart: on-failure
