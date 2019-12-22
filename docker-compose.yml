@@ -1,8 +1,11 @@
 version: "3.4"
 
+# Volume to hold elasticsearch data
 volumes:
   esdata:
 
+# Network for internal communication among ELK
+# components.
 networks:
   elk:
     driver: bridge
@@ -36,15 +39,12 @@ services:
     image: docker.elastic.co/kibana/kibana:7.5.1
     networks:
       - elk
-      - reverse-proxy
     depends_on:
       - elasticsearch
-    expose:
-      - "5601"
+    ports:
+      - "5601:5601"
     environment:
       - xpack.security.enabled=false
-      - VIRTUAL_HOST=kibana.local
-      - VIRTUAL_PORT=5601
     volumes:
       - ./services/elk/kibana/config:/usr/share/kibana/config/
 
@@ -70,9 +70,9 @@ services:
     volumes:
       - ./services/elk/metricbeat/config:/usr/share/metricbeat/config/
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    command:
-      - -e
-      - -c
-      - /usr/share/metricbeat/config/metricbeat.yml
+    command: ["-e", "-c", "/usr/share/metricbeat/config/metricbeat.yml"]
     user: root
     restart: on-failure
+    # often metricbeat won't find Kibana, b/c Kibana is slow to start.
+    # Using a restart policy means we'll keep trying. There is probably
+    # a better way here, but this work for now.
